@@ -33,8 +33,8 @@ Cliente (Webcam) <-> WebSocket <-> Servidor (GPU)
 
 1. Clone o repositório:
 ```bash
-git clone [seu-repositorio]
-cd [seu-diretorio]
+git clone https://github.com/asimov-academy/Deep-Live-Cam-Server
+cd Deep-Live-Cam-Server
 ```
 
 2. Crie e ative um ambiente virtual:
@@ -74,7 +74,7 @@ pip install onnxruntime-gpu==1.16.3
 
 1. Inicie o servidor WebSocket:
 ```bash
-python server.py
+python server_ws.py
 ```
 
 O servidor iniciará na porta 8765 por padrão.
