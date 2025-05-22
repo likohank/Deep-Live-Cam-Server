@@ -103,6 +103,7 @@ class FaceSwapServer:
         while self.processamento_ativo:
             frame = self.raw_frames.get()
             t1 = time()
+            # print(f"Thread {threading.current_thread().name} - Inicio")
             new_face = face_swapper.process_frame(self.source_face, frame)
             # new_face = face_enhancer.enhance_face(new_face)
             print(f"Thread {threading.current_thread().name} - Tempo de processamento: {time() - t1:.2f}s")
