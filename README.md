@@ -29,6 +29,7 @@ Cliente (Webcam) <-> WebSocket <-> Servidor (GPU)
 - CUDA Toolkit 11.8.0 (para GPUs NVIDIA)
 - ffmpeg
 
+先用pip 安装 torch==2.6.0 torchvision==0.21.0,再安装 basicsr==1.4.2
 ### Configuração do Ambiente
 
 1. Clone o repositório:
