@@ -96,9 +96,7 @@ Para melhor performance, recomendamos hospedar o servidor em uma máquina com GP
 - AWS EC2 com instâncias g4dn
 - Servidores dedicados com GPUs
 
-## Contribuição
 
-Sinta-se à vontade para contribuir com o projeto através de pull requests ou reportando issues.
 
 -----------------------------------------------------------------------------------------
 使用腾讯云GPU服务器 + ubuntu 22.04 + 不预装 驱动
@@ -199,3 +197,24 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
 改成from torchvision.transforms._functional_tensor import rgb_to_grayscale
 或者改成from torchvision.transforms.functional import rgb_to_grayscale
 均能够解决问题
+
+
+-------------------------------------------------
+ server_ws.py 的一些优化
+
+1.开启人脸增强的开关
+
+from modules.processors.frame import face_enhancer
+new_face = face_enhancer.enhance_face(new_face)
+
+2.增大frame 交换
+FaceSwapServer(max_workers=30)
+
+
+3.关闭 TensorrtExecutionProvider  优化加速
+#if 'TensorrtExecutionProvider' in providers:
+#    return ['TensorrtExecutionProvider']
+
+4.返回给客户端 png，增强画质(好像不起作用)
+#_, buffer = cv2.imencode('.jpg', frame)
+_, buffer = cv2.imencode('.png', frame)
