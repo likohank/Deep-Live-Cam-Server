@@ -192,3 +192,10 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
     echo 'export PATH=/usr/local/tensorrt/bin:$PATH' >> ~/.bashrc
     source ~/.bashrc
     ls /usr/local/tensorrt/lib/libnvinfer.so.8
+
+23. 出现ModuleNotFoundError: No module named 'torchvision.transforms.functional_tensor'的原因大概是原先的“名字”改了，但是安装的basicsr包中的名字没有改，所以会报错。
+只要在miniconda3/lib/python3.12/site-packages/basicsr/data/degradations.py文件中第8行将
+原from torchvision.transforms.functional_tensor import rgb_to_grayscale
+改成from torchvision.transforms._functional_tensor import rgb_to_grayscale
+或者改成from torchvision.transforms.functional import rgb_to_grayscale
+均能够解决问题
