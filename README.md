@@ -181,3 +181,14 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
        pip install websocket_client==1.8.0
        pip install opencv_python==4.8.0.74
     python client_ws.py
+
+
+
+22. 如果遇到 TensorrtExecutionProvider 错误
+    wget https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/secure/8.6.1/tars/TensorRT-8.6.1.6.Linux.x86_64-gnu.cuda-11.8.tar.gz
+    tar -xzf TensorRT-8.6.1.6.Linux.x86_64-gnu.cuda-11.8.tar.gz
+    sudo mv TensorRT-8.6.1.6 /usr/local/tensorrt
+    echo 'export LD_LIBRARY_PATH=/usr/local/tensorrt/lib:$LD_LIBRARY_PATH' >> ~/.bashrc
+    echo 'export PATH=/usr/local/tensorrt/bin:$PATH' >> ~/.bashrc
+    source ~/.bashrc
+    ls /usr/local/tensorrt/lib/libnvinfer.so.8
