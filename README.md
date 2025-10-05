@@ -172,10 +172,11 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
 18. 启动程序前 第一次 先设置个 代理， 因为要下载些东西
     export http_proxy="socks5://8YZsweP:Rtw2111j@18.55.140.95:10120"
     export https_proxy="socks5://8YZsweP:Rtw2111j@18.55.140.95:10120"
-19. python server_ws.py
+    export http_proxy=;export https_proxy=
+20. python server_ws.py
 
 
-20. 客户端 本地台式机安装
+21. 客户端 本地台式机安装
        pip install websocket_client==1.8.0
        pip install websocket_client==1.8.0
        pip install opencv_python==4.8.0.74
