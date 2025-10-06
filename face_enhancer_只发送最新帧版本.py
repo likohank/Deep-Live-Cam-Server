@@ -22,7 +22,7 @@ from modules.utilities import (
 # GFPGAN 对象池
 FACE_ENHANCER_POOL = None
 POOL_LOCK = threading.Lock()
-POOL_SIZE = 15  # 根据显存调整，建议4-8个
+POOL_SIZE = 6  # 根据显存调整，建议4-8个
 
 NAME = "DLC.FACE-ENHANCER"
 

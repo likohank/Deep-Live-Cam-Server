@@ -23,7 +23,7 @@ from modules.utilities import (
 FACE_ENHANCER_POOLS = {}
 POOL_LOCKS = {}
 GPU_COUNT = torch.cuda.device_count()
-POOL_SIZE_PER_GPU = 2  # 每个GPU上的实例数
+POOL_SIZE_PER_GPU = 3 # 每个GPU上的实例数
 
 NAME = "DLC.FACE-ENHANCER"
 
@@ -44,61 +44,101 @@ def create_dummy_frame():
 def pre_warm_enhancer(enhancer):
     """预热模型，强制加载到显存"""
     try:
+        print("预热 GFPGAN 模型...")
         dummy_frame = create_dummy_frame()
         _, _, _ = enhancer.enhance(dummy_frame, paste_back=True)
+        print("模型预热完成")
     except Exception as e:
         print(f"模型预热失败: {e}")
+        import traceback
+        traceback.print_exc()
 
 def init_face_enhancer_pools():
     """为每个GPU初始化对象池"""
     global FACE_ENHANCER_POOLS, POOL_LOCKS
-    
+
     model_path = os.path.join(models_dir, "GFPGANv1.4.pth")
     
+    # 检查模型文件是否存在
+    if not os.path.exists(model_path):
+        print(f"错误: 模型文件不存在: {model_path}")
+        return False
+
     print(f"检测到 {GPU_COUNT} 个GPU，为每个GPU创建 {POOL_SIZE_PER_GPU} 个实例")
-    
+
     for gpu_id in range(GPU_COUNT):
         pool_key = f"gpu_{gpu_id}"
         POOL_LOCKS[pool_key] = threading.Lock()
         FACE_ENHANCER_POOLS[pool_key] = Queue(maxsize=POOL_SIZE_PER_GPU)
-        
+
         device = torch.device(f"cuda:{gpu_id}")
-        
+
         print(f"在 GPU {gpu_id} 上初始化 GFPGAN 对象池...")
-        
+
         for i in range(POOL_SIZE_PER_GPU):
-            enhancer = gfpgan.GFPGANer(
-                model_path=model_path, 
-                upscale=1, 
-                device=device
-            )
-            
-            # 预热第一个实例
-            if i == 0:
+            try:
+                enhancer = gfpgan.GFPGANer(
+                    model_path=model_path,
+                    upscale=1,
+                    device=device
+                )
+                print(f"GPU {gpu_id} 实例 {i} 创建成功")
+
+                # 预热第一个实例
+                #if i == 0:
                 pre_warm_enhancer(enhancer)
-            
-            FACE_ENHANCER_POOLS[pool_key].put(enhancer)
-        
+
+                FACE_ENHANCER_POOLS[pool_key].put(enhancer)
+
+            except Exception as e:
+                print(f"GPU {gpu_id} 实例 {i} 创建失败: {e}")
+                import traceback
+                traceback.print_exc()
+                # 如果创建失败，添加一个None作为占位符
+                FACE_ENHANCER_POOLS[pool_key].put(None)
+
         print(f"GPU {gpu_id} 对象池初始化完成")
+    
+    return True
 
 def get_face_enhancer_from_pool(gpu_id=None):
     """从指定GPU的池中获取实例，如果未指定则轮询"""
     if not FACE_ENHANCER_POOLS:
-        init_face_enhancer_pools()
-    
+        if not init_face_enhancer_pools():
+            return None
+
     # 如果没有指定GPU，则使用轮询策略
     if gpu_id is None:
-        gpu_id = getattr(thread_local, 'current_gpu', 0)
-        gpu_id = (gpu_id + 1) % GPU_COUNT
-        thread_local.current_gpu = gpu_id
-    
+        if not hasattr(thread_local, 'current_gpu'):
+            thread_local.current_gpu = 0
+        gpu_id = thread_local.current_gpu
+        thread_local.current_gpu = (gpu_id + 1) % GPU_COUNT
+
     pool_key = f"gpu_{gpu_id}"
     
+    if pool_key not in FACE_ENHANCER_POOLS:
+        print(f"错误: GPU {gpu_id} 的池不存在")
+        return None
+        
     with POOL_LOCKS[pool_key]:
-        return FACE_ENHANCER_POOLS[pool_key].get()
+        if FACE_ENHANCER_POOLS[pool_key].empty():
+            print(f"警告: GPU {gpu_id} 的池为空")
+            return None
+            
+        enhancer = FACE_ENHANCER_POOLS[pool_key].get()
+        
+        # 检查是否是占位符
+        if enhancer is None:
+            print(f"警告: GPU {gpu_id} 的实例创建失败")
+            return None
+            
+        return enhancer
 
 def return_face_enhancer_to_pool(enhancer, gpu_id):
     """将实例归还到指定GPU的池中"""
+    if enhancer is None:
+        return
+        
     pool_key = f"gpu_{gpu_id}"
     
     if pool_key in FACE_ENHANCER_POOLS:
@@ -131,16 +171,26 @@ def enhance_face(temp_frame: Frame) -> Frame:
     # 为当前线程选择GPU
     if not hasattr(thread_local, 'current_gpu'):
         thread_local.current_gpu = 0
-    
+
     gpu_id = thread_local.current_gpu
     thread_local.current_gpu = (gpu_id + 1) % GPU_COUNT
-    
+
+    print(f"线程 {threading.current_thread().name} 使用 GPU {gpu_id} 进行人脸增强")
+
     enhancer = get_face_enhancer_from_pool(gpu_id)
+    if enhancer is None:
+        print(f"线程 {threading.current_thread().name} 无法获取 GFPGAN 实例，跳过增强")
+        return temp_frame
+        
     try:
+        print(f"线程 {threading.current_thread().name} 开始人脸增强")
         _, _, temp_frame = enhancer.enhance(temp_frame, paste_back=True)
+        print(f"线程 {threading.current_thread().name} 人脸增强完成")
         return temp_frame
     except Exception as e:
-        print(f"GPU {gpu_id} 人脸增强失败: {e}")
+        print(f"线程 {threading.current_thread().name} 在 GPU {gpu_id} 人脸增强失败: {e}")
+        import traceback
+        traceback.print_exc()
         return temp_frame
     finally:
         return_face_enhancer_to_pool(enhancer, gpu_id)
