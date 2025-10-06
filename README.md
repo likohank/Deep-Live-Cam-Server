@@ -113,8 +113,8 @@ Para melhor performance, recomendamos hospedar o servidor em uma máquina com GP
 7. 测试 nvcc --version  ;  nvidia-smi
 
 
-8. 下载cudnn 8.6 https://developer.nvidia.com/rdp/cudnn-archive
-9. sudo dpkg -i libcudnn7_7.6.5.32-1+cuda10.0_amd64.deb
+8. 下载cudnn 8.6 https://developer.nvidia.com/rdp/cudnn-archive, 下载到本地
+9. sudo dpkg -i cudnn-local-repo-ubuntu2204-8.6.0.163_1.0-1_amd64.deb
 sudo cp /var/cudnn-local-repo-ubuntu2204-8.6.0.163/cudnn-local-FAED14DD-keyring.gpg /usr/share/keyrings/
 sudo apt-get update
 sudo apt-get install libcudnn8=8.6.0.163-1+cuda11.8                 # 这里输入到=按tab补全即可，安装运行库
