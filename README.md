@@ -100,6 +100,7 @@ Para melhor performance, recomendamos hospedar o servidor em uma máquina com GP
 
 -----------------------------------------------------------------------------------------
 使用腾讯云GPU服务器 + ubuntu 22.04 + 不预装 驱动
+使用到的文件 都可以在服务器上  19.143.14.205:8011/xxxxxx  上面wget下载
 
 1. https://blog.csdn.net/xundh/article/details/127974227  直接开始第二步 安装cuda，因为cuda 安装程序 带 驱动。
 2. 下载 cuda_11.8.0_520.61.05_linux.run
