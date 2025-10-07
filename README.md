@@ -155,7 +155,7 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
 15. pip install cython
     pip install -i https://mirrors.aliyun.com/pypi/simple tb-nightly
     pip install --upgrade pip setuptools wheel
-    pip install torch==2.6.0
+    pip install torch==2.6.0  --index-url https://download.pytorch.org/whl/cu118
     pip install -i https://pypi.tuna.tsinghua.edu.cn/simple basicsr==1.4.2
 
 16. 安装 requirements.txt，内容如下
@@ -183,6 +183,8 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
     #torch_tensorrt==2.7.0
     装不上的按下面命令装
     pip install torch torchvision torchaudio  torch_tensorrt --index-url https://download.pytorch.org/whl/cu118
+
+    pip install -r requirements.txt  --index-url https://download.pytorch.org/whl/cu118
 
 
 18. pip install -r requirements.txt
