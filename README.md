@@ -217,6 +217,9 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
 均能够解决问题
 
 
+
+24. Instructions for CUDA v11.8 and cuDNN 8.7 installation on Ubuntu 22.04 for PyTorch 2.0.0
+    https://gist.github.com/lamcnguyen89/71ba818f9492d1b7d5f45b1093e78863
 -------------------------------------------------
  server_ws.py 的一些优化
 
