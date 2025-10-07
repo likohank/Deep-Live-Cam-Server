@@ -109,6 +109,7 @@ Para melhor performance, recomendamos hospedar o servidor em uma máquina com GP
    
    export PATH=$PATH:/usr/local/cuda-11.8/bin
    export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/cuda-11.8/lib64
+   sudo ldconfig
    
 7. 测试 nvcc --version  ;  nvidia-smi
 
@@ -120,6 +121,19 @@ sudo apt-get update
 sudo apt-get install libcudnn8=8.6.0.163-1+cuda11.8                 # 这里输入到=按tab补全即可，安装运行库
 sudo apt-get install libcudnn8-dev=8.6.0.163-1+cuda11.8          # 通过tab自动补全，安装developer 库
 sudo apt-get install libcudnn8-samples=8.6.0.163-1+cuda11.8  # 通过tab自动补全，安装示例和文档
+
+
+或者可以离线安装cudnn
+
+CUDNN_TAR_FILE="cudnn-linux-x86_64-8.7.0.84_cuda11-archive.tar.xz"
+sudo wget https://developer.download.nvidia.com/compute/redist/cudnn/v8.7.0/local_installers/11.8/cudnn-linux-x86_64-8.7.0.84_cuda11-archive.tar.xz
+sudo tar -xvf ${CUDNN_TAR_FILE}
+sudo mv cudnn-linux-x86_64-8.7.0.84_cuda11-archive cuda
+
+sudo cp -P cuda/include/cudnn.h /usr/local/cuda-11.8/include
+sudo cp -P cuda/lib/libcudnn* /usr/local/cuda-11.8/lib64/
+sudo chmod a+r /usr/local/cuda-11.8/lib64/libcudnn*
+
 
 
 8.测试 cudnn
