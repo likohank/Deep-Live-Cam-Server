@@ -166,6 +166,8 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
     websockets==12.0
     
     #torch_tensorrt==2.7.0
+    装不上的按下面命令装
+    pip install torch torchvision torchaudio  torch_tensorrt --index-url https://download.pytorch.org/whl/cu118
 
 
 18. pip install -r requirements.txt
