@@ -160,14 +160,16 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
     scikit_learn==1.2.2
     tensorflow==2.20.0
     torch==2.7.0
-    torch_tensorrt==2.7.0
     torchvision
     tqdm==4.66.4
     websocket_client==1.8.0
     websockets==12.0
+    
+    #torch_tensorrt==2.7.0
 
-17. pip install -r requirements.txt
-18. 启动程序前 第一次 先设置个 代理， 因为要下载些东西
+
+18. pip install -r requirements.txt
+19. 启动程序前 第一次 先设置个 代理， 因为要下载些东西
     export http_proxy="socks5://8YZsweP:Rtw2111j@18.55.140.95:10120"
     export https_proxy="socks5://8YZsweP:Rtw2111j@18.55.140.95:10120"
     export http_proxy=;export https_proxy=
