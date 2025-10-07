@@ -14,7 +14,7 @@ from queue import Queue
 import threading
 
 from modules.processors.frame import face_swapper
-#from modules.processors.frame import face_enhancer
+from modules.processors.frame import face_enhancer
 
 
 def configurar_providers():
@@ -54,7 +54,7 @@ face_swapper.process_frame(source_face, temp_frame)
 # Teste de processamento
 
 class FaceSwapServer:
-    def __init__(self, source_image_path="photos/elon.jpg", max_workers=10):
+    def __init__(self, source_image_path="photos/cr7.jpg", max_workers=10):
         self.configurar_qualidade()
         self.carregar_source_face(source_image_path)
         self.clientes_ativos = set()
