@@ -123,6 +123,13 @@ class FaceSwapServer:
         modules.globals.mask_size = 0.5
         modules.globals.source_image_scaling_factor = 2
 
+        #modules.globals.color_adjustment = True
+        #modules.globals.mouth_mask = True        # 保持嘴部自然度
+        #modules.globals.mask_feather_ratio = 6   # 适中的羽化
+        #modules.globals.mask_down_size = 0.15    # 适中的下采样
+        #modules.globals.mask_size = 0.4          # 适中的遮罩范围
+        #modules.globals.source_image_scaling_factor = 1.5  # 适中的源图像缩放
+
     def carregar_source_face(self, source_image_path):
         source_img = cv2.imread(source_image_path)
         if source_img is None:
@@ -256,7 +263,9 @@ class FaceSwapServer:
                 current_time = time.time()
                 
                 # 限制发送频率（最大30FPS）
-                if current_time - last_sent_time < 0.033:  # 约30FPS
+                #if current_time - last_sent_time < 0.033:  # 约30FPS
+                # 限制发送频率（最大20FPS）
+                if current_time - last_sent_time < 0.05:  # 约20FPS
                     await asyncio.sleep(0.001)
                     continue
                 
@@ -328,7 +337,7 @@ class FaceSwapServer:
 
 async def main():
     # 根据GPU内存调整工作线程数
-    max_workers = 15
+    max_workers = 16
     
     server = FaceSwapServer(max_workers=max_workers)
     print(f"启动 WebSocket 服务器在端口 8765...")
@@ -337,7 +346,7 @@ async def main():
         server.processar_cliente,
         '0.0.0.0', 8765,
         ping_interval=30,
-        ping_timeout=10,
+        ping_timeout=60,
         max_size=10 * 1024 * 1024  # 10MB 最大消息大小
     ):
         print("服务器运行中。等待连接...")

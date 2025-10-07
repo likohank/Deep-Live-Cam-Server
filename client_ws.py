@@ -19,7 +19,7 @@ class WebcamClient:
         self.intervalo = 1.0 / self.fps_desejado
 
     def codificar_imagem(self, frame):
-        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 90]  # Qualidade JPEG reduzida para maior velocidade
+        encode_param = [int(cv2.IMWRITE_JPEG_QUALITY), 80]  # Qualidade JPEG reduzida para maior velocidade
         _, buffer = cv2.imencode('.jpg', frame, encode_param)
         return base64.b64encode(buffer).decode('utf-8')
 
@@ -91,11 +91,11 @@ class WebcamClient:
         ws_thread.start()
 
         self.cap = cv2.VideoCapture(0)
-        #self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)  # Reduz resolução
-        #self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
+        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 640)  # Reduz resolução
+        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 480)
 
-        self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)  # Reduz resolução
-        self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
+        #self.cap.set(cv2.CAP_PROP_FRAME_WIDTH, 1920)  # Reduz resolução
+        #self.cap.set(cv2.CAP_PROP_FRAME_HEIGHT, 1080)
         
         captura_thread = threading.Thread(target=self.capturar_frames, daemon=True)
         captura_thread.start()

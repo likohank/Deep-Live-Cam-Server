@@ -22,7 +22,7 @@ from modules.utilities import (
 # 双 GPU 对象池
 FACE_ENHANCER_POOLS = None
 POOL_LOCK = threading.Lock()
-POOL_SIZE_PER_GPU = 1  # 每个 GPU 4个实例，总共8个
+POOL_SIZE_PER_GPU = 2  # 每个 GPU 4个实例，总共8个
 
 NAME = "DLC.FACE-ENHANCER"
 
@@ -66,6 +66,7 @@ def init_face_enhancer_pool():
                 gpu_count = torch.cuda.device_count()
                 print(f"检测到 {gpu_count} 个 GPU")
                 
+                #for i in range(1,gpu_count):  #把显卡0留给其他模型使用
                 for i in range(gpu_count):
                     gpu_name = torch.cuda.get_device_name(i)
                     gpu_memory = torch.cuda.get_device_properties(i).total_memory / 1024**3
@@ -77,7 +78,10 @@ def init_face_enhancer_pool():
                 available_gpus = [torch.device("cpu")]
             else:
                 # 使用前两个 GPU（如果有的话）
-                available_gpus = available_gpus[:2]
+                #available_gpus = available_gpus[:2]
+
+                #使用所有GPU
+                available_gpus = available_gpus[:]
                 print(f"使用 GPU: {available_gpus}")
 
             # 为每个 GPU 创建对象池
@@ -128,11 +132,12 @@ def get_face_enhancer_from_pool():
     
     # 如果当前池为空，尝试其他池
     if pool.empty():
-        for i in range(len(FACE_ENHANCER_POOLS)):
+        for i in range(1,len(FACE_ENHANCER_POOLS)):
             alt_index = (current_pool_index + i) % len(FACE_ENHANCER_POOLS)
             alt_pool = FACE_ENHANCER_POOLS[alt_index]
             if not alt_pool.empty():
                 pool = alt_pool
+                current_pool_index = alt_index  #kangkang
                 break
     
     return pool.get(), current_pool_index
