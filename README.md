@@ -192,10 +192,15 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
     export http_proxy="socks5://8YZsweP:Rtw2111j@18.55.140.95:10120"
     export https_proxy="socks5://8YZsweP:Rtw2111j@18.55.140.95:10120"
     export http_proxy=;export https_proxy=
-20. python server_ws.py
+
+20. 修改 /root/miniconda3/envs/py311/lib/python3.11/site-packages/basicsr/data/degradations.py 第8行 为
+    from torchvision.transforms._functional_tensor import rgb_to_grayscale
+    
+21. 从服务器上下载那两个模型  inswapper_128_fp16.onnx  GFPGANv1.4.pth  到 models 文件夹
+22. python server_ws.py
 
 
-21. 客户端 本地台式机安装
+23. 客户端 本地台式机安装
        pip install websocket_client==1.8.0
        pip install websocket_client==1.8.0
        pip install opencv_python==4.8.0.74
@@ -203,7 +208,7 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
 
 
 
-22. 如果遇到 TensorrtExecutionProvider 错误
+24. 如果遇到 TensorrtExecutionProvider 错误
     wget https://developer.nvidia.com/downloads/compute/machine-learning/tensorrt/secure/8.6.1/tars/TensorRT-8.6.1.6.Linux.x86_64-gnu.cuda-11.8.tar.gz
     tar -xzf TensorRT-8.6.1.6.Linux.x86_64-gnu.cuda-11.8.tar.gz
     sudo mv TensorRT-8.6.1.6 /usr/local/tensorrt
@@ -212,7 +217,7 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
     source ~/.bashrc
     ls /usr/local/tensorrt/lib/libnvinfer.so.8
 
-23. 出现ModuleNotFoundError: No module named 'torchvision.transforms.functional_tensor'的原因大概是原先的“名字”改了，但是安装的basicsr包中的名字没有改，所以会报错。
+25. 出现ModuleNotFoundError: No module named 'torchvision.transforms.functional_tensor'的原因大概是原先的“名字”改了，但是安装的basicsr包中的名字没有改，所以会报错。
 只要在miniconda3/lib/python3.12/site-packages/basicsr/data/degradations.py文件中第8行将
 原from torchvision.transforms.functional_tensor import rgb_to_grayscale
 改成from torchvision.transforms._functional_tensor import rgb_to_grayscale
@@ -221,7 +226,7 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
 
 
 
-24. Instructions for CUDA v11.8 and cuDNN 8.7 installation on Ubuntu 22.04 for PyTorch 2.0.0
+26. Instructions for CUDA v11.8 and cuDNN 8.7 installation on Ubuntu 22.04 for PyTorch 2.0.0
     https://gist.github.com/lamcnguyen89/71ba818f9492d1b7d5f45b1093e78863
 -------------------------------------------------
  server_ws.py 的一些优化
