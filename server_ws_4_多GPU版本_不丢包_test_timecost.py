@@ -158,68 +158,68 @@ class FaceSwapServer:
             self.frame_sequence += 1
             return seq
 
-def processar_frames(self):
-    thread_name = threading.current_thread().name
-    print(f"线程 {thread_name} 启动")
+    def processar_frames(self):
+        thread_name = threading.current_thread().name
+        print(f"线程 {thread_name} 启动")
 
-    while self.processamento_ativo:
-        try:
-            # 获取待处理帧（带序列号）
-            sequence, frame = self.raw_frames.get(timeout=1.0)
-            
-            # 总开始时间
-            t_total_start = time.time()
-            
-            # 1. 人脸检测时间
-            t_detect_start = time.time()
-            target_face = get_one_face(frame)
-            detect_time = time.time() - t_detect_start
-            
-            if target_face:
-                # 2. 人脸交换时间
-                t_swap_start = time.time()
-                new_face = face_swapper.process_frame(self.source_face, frame)
-                swap_time = time.time() - t_swap_start
+        while self.processamento_ativo:
+            try:
+                # 获取待处理帧（带序列号）
+                sequence, frame = self.raw_frames.get(timeout=1.0)
                 
-                # 3. 人脸增强时间
-                t_enhance_start = time.time()
-                new_face = face_enhancer.enhance_face(new_face)
-                enhance_time = time.time() - t_enhance_start
+                # 总开始时间
+                t_total_start = time.time()
                 
-                total_time = time.time() - t_total_start
+                # 1. 人脸检测时间
+                t_detect_start = time.time()
+                target_face = get_one_face(frame)
+                detect_time = time.time() - t_detect_start
                 
-                # 更新统计信息
-                with self.stats_lock:
-                    self.processed_count += 1
-                
-                # 将处理后的帧按序列号放入优先级队列
-                with self.processed_frames_lock:
-                    heapq.heappush(self.processed_frames, FrameWithSequence(sequence, new_face))
-                
-                # 每帧都打印详细时间（前50帧），之后每10帧打印一次
-                if self.processed_count <= 50 or self.processed_count % 10 == 0:
-                    print(f"线程 {thread_name} - 总时间: {total_time:.3f}s | 检测: {detect_time:.3f}s | 交换: {swap_time:.3f}s | 增强: {enhance_time:.3f}s | 序列号: {sequence}")
+                if target_face:
+                    # 2. 人脸交换时间
+                    t_swap_start = time.time()
+                    new_face = face_swapper.process_frame(self.source_face, frame)
+                    swap_time = time.time() - t_swap_start
                     
-            else:
-                # 如果没有检测到人脸，也记录时间
-                total_time = time.time() - t_total_start
-                swap_time = 0
-                enhance_time = 0
-                
-                with self.stats_lock:
-                    self.processed_count += 1
-                
-                with self.processed_frames_lock:
-                    heapq.heappush(self.processed_frames, FrameWithSequence(sequence, frame))
-                
-                if self.processed_count <= 50 or self.processed_count % 10 == 0:
-                    print(f"线程 {thread_name} - 总时间: {total_time:.3f}s | 检测: {detect_time:.3f}s | 无人脸跳过 | 序列号: {sequence}")
+                    # 3. 人脸增强时间
+                    t_enhance_start = time.time()
+                    new_face = face_enhancer.enhance_face(new_face)
+                    enhance_time = time.time() - t_enhance_start
                     
-        except Exception as e:
-            # 忽略超时异常
-            if "empty" not in str(e):
-                print(f"线程 {thread_name} 处理错误: {e}")
-            continue
+                    total_time = time.time() - t_total_start
+                    
+                    # 更新统计信息
+                    with self.stats_lock:
+                        self.processed_count += 1
+                    
+                    # 将处理后的帧按序列号放入优先级队列
+                    with self.processed_frames_lock:
+                        heapq.heappush(self.processed_frames, FrameWithSequence(sequence, new_face))
+                    
+                    # 每帧都打印详细时间（前50帧），之后每10帧打印一次
+                    if self.processed_count <= 50 or self.processed_count % 10 == 0:
+                        print(f"线程 {thread_name} - 总时间: {total_time:.3f}s | 检测: {detect_time:.3f}s | 交换: {swap_time:.3f}s | 增强: {enhance_time:.3f}s | 序列号: {sequence}")
+                        
+                else:
+                    # 如果没有检测到人脸，也记录时间
+                    total_time = time.time() - t_total_start
+                    swap_time = 0
+                    enhance_time = 0
+                    
+                    with self.stats_lock:
+                        self.processed_count += 1
+                    
+                    with self.processed_frames_lock:
+                        heapq.heappush(self.processed_frames, FrameWithSequence(sequence, frame))
+                    
+                    if self.processed_count <= 50 or self.processed_count % 10 == 0:
+                        print(f"线程 {thread_name} - 总时间: {total_time:.3f}s | 检测: {detect_time:.3f}s | 无人脸跳过 | 序列号: {sequence}")
+                        
+            except Exception as e:
+                # 忽略超时异常
+                if "empty" not in str(e):
+                    print(f"线程 {thread_name} 处理错误: {e}")
+                continue
 
     def preparar_frames_para_envio(self):
         """准备按顺序发送的帧"""
