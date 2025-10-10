@@ -166,11 +166,12 @@ def enhancer_worker_with_ready_signal(process_id, device_id, task_queue, result_
     while True:
         try:
             # 获取任务
+            time1 = time.time()
             task_id, frame_data = task_queue.get()
             if task_id is None:  # 终止信号
                 break
-                
             start_time = time.time()
+            get_time = start_time - time1
             
             # 执行增强
             _, _, enhanced_frame = enhancer.enhance(frame_data, paste_back=True)
@@ -180,6 +181,9 @@ def enhancer_worker_with_ready_signal(process_id, device_id, task_queue, result_
             
             # 发送结果
             result_queue.put((task_id, enhanced_frame, cost_time))
+
+            put_time = time.time() - end_time
+            print(f"enhancer_worker_with_ready_signal get耗时 {get_time:.3f}s, 增强耗时 {cost_time:.3f}s, put耗时 {put_time:.3f}s-----------------------------")
             
         except Exception as e:
             print(f"增强进程 {process_id} 处理失败: {e}")

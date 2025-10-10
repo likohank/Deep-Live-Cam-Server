@@ -2,8 +2,6 @@ import os
 import modules
 import modules.globals
 import cv2
-import onnxruntime
-from modules.face_analyser import get_one_face
 from PIL import Image
 import asyncio
 import websockets
@@ -15,13 +13,11 @@ import threading
 import torch
 import heapq  # 用于优先级队列
 
-from modules.processors.frame import face_swapper
 from modules.processors.frame import face_enhancer
 
 def configurar_providers():
-    providers = onnxruntime.get_available_providers()
-    print(f"[ort] available providers: {providers}")
-    if "CUDAExecutionProvider" in providers:
+    #if "CUDAExecutionProvider" in providers:
+    if True:
         print("[ort] using CUDAExecutionProvider")
         return [
             ("CUDAExecutionProvider", {
@@ -43,10 +39,10 @@ source_path = "photos/dilma.jpg"
 target_path = "photos/elon.jpg"
 output_path = "photos/hi.jpg"
 
-face = cv2.imread(source_path)
-source_face = get_one_face(face)
-temp_frame = cv2.imread(target_path)
-face_swapper.process_frame(source_face, temp_frame)
+#face = cv2.imread(source_path)
+#source_face = get_one_face(face)
+#temp_frame = cv2.imread(target_path)
+#face_swapper.process_frame(source_face, temp_frame)
 
 def check_gpu_memory():
     """检查所有GPU显存使用情况"""
@@ -80,13 +76,14 @@ class FrameWithSequence:
 class FaceSwapServer:
     def __init__(self, source_image_path="photos/cr7.jpg", max_workers=10):
         self.configurar_qualidade()
-        self.carregar_source_face(source_image_path)
         self.clientes_ativos = set()
 
         # 预初始化多进程增强池 - 在视频流到达前完成
         print("正在预初始化多进程人脸增强池...")
         face_enhancer.init_face_enhancer_pool()  # 每个GPU2个进程
         print("多进程增强池预初始化完成")
+
+        self.carregar_source_face(source_image_path)
 
         # 帧序列号
         self.frame_sequence = 0
@@ -108,6 +105,7 @@ class FaceSwapServer:
 
         # 启动工作线程
         self.worker_threads = []
+        time.sleep(5)
         for i in range(max_workers):
             t = threading.Thread(target=self.processar_frames, name=f"Worker-{i}")
             t.daemon = True
@@ -142,6 +140,7 @@ class FaceSwapServer:
         #modules.globals.source_image_scaling_factor = 1.5  # 适中的源图像缩放
 
     def carregar_source_face(self, source_image_path):
+        from modules.face_analyser import get_one_face
         source_img = cv2.imread(source_image_path)
         if source_img is None:
             raise Exception(f"Erro ao carregar imagem fonte: {source_image_path}")
@@ -170,6 +169,8 @@ class FaceSwapServer:
             return seq
 
     def processar_frames(self):
+        from modules.processors.frame import face_swapper
+        #from modules.face_analyser import get_one_face
         thread_name = threading.current_thread().name
         print(f"线程 {thread_name} 启动")
 
@@ -406,7 +407,7 @@ class FaceSwapServer:
 
 async def main():
     # 根据GPU内存调整工作线程数
-    max_workers = 10
+    max_workers = 5
     
     server = FaceSwapServer(max_workers=max_workers)
     print(f"启动 WebSocket 服务器在端口 8765...")
