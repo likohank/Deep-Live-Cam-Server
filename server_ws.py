@@ -231,7 +231,7 @@ class FaceSwapServer:
                     with self.processed_frames_lock:
                         heapq.heappush(self.processed_frames, FrameWithSequence(sequence, frame))
                     
-                    if self.processed_count <= 50 or self.processed_count % 10 == 0:
+                    if self.processed_count <= 50 or self.processed_count % 1 == 0:
                         print(f"线程 {thread_name} - 总时间: {total_time:.3f}s | 检测: {detect_time:.3f}s | 无人脸跳过 | 序列号: {sequence}")
                         
             except Exception as e:
@@ -403,7 +403,7 @@ class FaceSwapServer:
 
 async def main():
     # 根据GPU内存调整工作线程数
-    max_workers = 10
+    max_workers = 1
     
     server = FaceSwapServer(max_workers=max_workers)
     print(f"启动 WebSocket 服务器在端口 8765...")
