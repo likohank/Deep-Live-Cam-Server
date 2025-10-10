@@ -6,6 +6,7 @@ import os
 from queue import Queue
 import numpy as np
 
+import time
 import modules.globals
 import modules.processors.frame.core
 from modules.core import update_status
@@ -22,7 +23,7 @@ from modules.utilities import (
 # 双 GPU 对象池
 FACE_ENHANCER_POOLS = None
 POOL_LOCK = threading.Lock()
-POOL_SIZE_PER_GPU = 10  # 每个 GPU 4个实例，总共8个
+POOL_SIZE_PER_GPU = 1  # 每个 GPU 4个实例，总共8个
 
 NAME = "DLC.FACE-ENHANCER"
 
@@ -81,8 +82,8 @@ def init_face_enhancer_pool():
                 #available_gpus = available_gpus[:2]
 
                 #使用所有GPU
-                available_gpus = available_gpus[1:]
-                #available_gpus = available_gpus[:]
+                #available_gpus = available_gpus[1:]
+                available_gpus = available_gpus[:]
                 print(f"使用 GPU: {available_gpus}")
 
             # 为每个 GPU 创建对象池
@@ -168,9 +169,17 @@ def pre_start() -> bool:
 
 def enhance_face(temp_frame: Frame) -> Frame:
     """使用双 GPU 对象池进行人脸增强"""
+    fetch_start = time.time()
     enhancer, pool_index = get_face_enhancer_from_pool()
+
+    enhance_start = time.time()
+    fetch_cost_time = enhance_start - fetch_start
+
     try:
         _, _, temp_frame = enhancer.enhance(temp_frame, paste_back=True)
+        enhance_cost_time = time.time() - enhance_start
+        print(f"face_enhancer fetch耗时{fetch_cost_time:.3f}s  enhance耗时{enhance_cost_time:.3f}s")
+
         return temp_frame
     except Exception as e:
         print(f"人脸增强失败 (GPU {enhancer.gpu_id}): {e}")
