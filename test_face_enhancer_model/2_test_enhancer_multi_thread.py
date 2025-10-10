@@ -225,7 +225,7 @@ def load_frame_with_shape(file_path="frame.dat", shape=(480, 640, 3)):
 if __name__ == "__main__":
     # 双GPU压测示例
     run_dual_gpu_benchmark(
-        total_threads=2,         # 总线程数量
-        iterations_per_thread=100,  # 每个线程的迭代次数
+        total_threads=12,         # 总线程数量
+        iterations_per_thread=50,  # 每个线程的迭代次数
         frame_file="frame.dat"    # 帧文件路径
     )

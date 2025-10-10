@@ -210,7 +210,7 @@ if __name__ == "__main__":
     # 单设备压测示例
     print("=== 单设备压测 ===")
     run_simple_benchmark(
-        thread_count=2,           # 线程数量
+        thread_count=1,           # 线程数量
         iterations_per_thread=100,  # 每个线程的迭代次数
         frame_file="frame.dat",   # 帧文件路径
         device_id=0               # 设备ID (GPU编号，-1表示CPU)
