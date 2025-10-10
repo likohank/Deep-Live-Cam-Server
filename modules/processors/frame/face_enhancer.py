@@ -1,11 +1,10 @@
 from typing import Any, List
 import cv2
-import threading
+import multiprocessing as mp
 import gfpgan
 import os
-from queue import Queue
 import numpy as np
-
+import time
 import modules.globals
 import modules.processors.frame.core
 from modules.core import update_status
@@ -19,10 +18,8 @@ from modules.utilities import (
     is_video,
 )
 
-# 双 GPU 对象池
-FACE_ENHANCER_POOLS = None
-POOL_LOCK = threading.Lock()
-POOL_SIZE_PER_GPU = 10  # 每个 GPU 4个实例，总共8个
+# 设置多进程启动方法
+mp.set_start_method('spawn', force=True)
 
 NAME = "DLC.FACE-ENHANCER"
 
@@ -30,6 +27,15 @@ abs_dir = os.path.dirname(os.path.abspath(__file__))
 models_dir = os.path.join(
     os.path.dirname(os.path.dirname(os.path.dirname(abs_dir))), "models"
 )
+
+# 全局多进程池
+ENHANCER_PROCESS_POOL = None
+TASK_QUEUE = None
+RESULT_QUEUE = None
+PROCESSES = []
+POOL_INITIALIZED = False
+
+PROCESSES_PER_GPU = 5
 
 def create_dummy_frame():
     """创建一个用于预热的虚拟帧"""
@@ -40,114 +46,228 @@ def create_dummy_frame():
     cv2.ellipse(dummy_frame, (64, 50), (15, 10), 0, 0, 180, (0, 0, 0), 2)
     return dummy_frame
 
-def pre_warm_enhancer(enhancer):
-    """预热模型，强制加载到显存"""
-    try:
-        print("预热 GFPGAN 模型...")
-        dummy_frame = create_dummy_frame()
-        _, _, _ = enhancer.enhance(dummy_frame, paste_back=True)
-        print("模型预热完成")
-    except Exception as e:
-        print(f"模型预热失败: {e}")
+def create_enhancer(device_id=0):
+    """创建 GFPGAN 增强器实例"""
+    model_path = os.path.join(models_dir, "GFPGANv1.4.pth")
+
+    if torch.cuda.is_available() and device_id < torch.cuda.device_count():
+        device = torch.device(f"cuda:{device_id}")
+        print(f"增强进程使用 GPU {device_id}")
+    else:
+        device = torch.device("cpu")
+        print("增强进程使用 CPU")
+
+    enhancer = gfpgan.GFPGANer(
+        model_path=model_path,
+        upscale=1,
+        device=device
+    )
+    
+    return enhancer
+
 
 def init_face_enhancer_pool():
-    """初始化双 GPU GFPGAN 对象池"""
-    global FACE_ENHANCER_POOLS
+    """初始化多进程增强池 - 同步版本，会阻塞直到所有进程就绪"""
+    global ENHANCER_PROCESS_POOL, TASK_QUEUE, RESULT_QUEUE, PROCESSES, POOL_INITIALIZED, PROCESSES_PER_GPU
 
-    with POOL_LOCK:
-        if FACE_ENHANCER_POOLS is None:
-            FACE_ENHANCER_POOLS = []
-            
-            model_path = os.path.join(models_dir, "GFPGANv1.4.pth")
-            
-            # 检测可用 GPU
-            available_gpus = []
-            if torch.cuda.is_available():
-                gpu_count = torch.cuda.device_count()
-                print(f"检测到 {gpu_count} 个 GPU")
-                
-                #for i in range(1,gpu_count):  #把显卡0留给其他模型使用
-                for i in range(gpu_count):
-                    gpu_name = torch.cuda.get_device_name(i)
-                    gpu_memory = torch.cuda.get_device_properties(i).total_memory / 1024**3
-                    print(f"GPU {i}: {gpu_name}, 显存: {gpu_memory:.1f}GB")
-                    available_gpus.append(i)
-            
-            if not available_gpus:
-                print("未检测到 GPU，使用 CPU")
-                available_gpus = [torch.device("cpu")]
-            else:
-                # 使用前两个 GPU（如果有的话）
-                #available_gpus = available_gpus[:2]
-
-                #使用所有GPU
-                available_gpus = available_gpus[1:]
-                #available_gpus = available_gpus[:]
-                print(f"使用 GPU: {available_gpus}")
-
-            # 为每个 GPU 创建对象池
-            for gpu_id in available_gpus:
-                if isinstance(gpu_id, int):
-                    device = torch.device(f"cuda:{gpu_id}")
-                else:
-                    device = gpu_id
-                    
-                pool = Queue(maxsize=POOL_SIZE_PER_GPU)
-                print(f"在 {device} 上初始化 GFPGAN 对象池，大小: {POOL_SIZE_PER_GPU}")
-
-                for i in range(POOL_SIZE_PER_GPU):
-                    enhancer = gfpgan.GFPGANer(
-                        model_path=model_path,
-                        upscale=1,
-                        device=device
-                    )
-
-                    # 预热第一个实例
-                    if i == 0:
-                        pre_warm_enhancer(enhancer)
-
-                    # 为增强器标记所属 GPU
-                    enhancer.gpu_id = gpu_id if isinstance(gpu_id, int) else -1
-                    pool.put(enhancer)
-
-                FACE_ENHANCER_POOLS.append(pool)
-
-            print(f"双 GPU GFPGAN 对象池初始化完成，总共 {len(available_gpus) * POOL_SIZE_PER_GPU} 个实例")
-
-# 轮询计数器，用于负载均衡
-_gpu_selector = 0
-_selector_lock = threading.Lock()
-
-def get_face_enhancer_from_pool():
-    """从池中获取 GFPGAN 实例（负载均衡）"""
-    global _gpu_selector
+    processes_per_gpu = PROCESSES_PER_GPU
     
-    if FACE_ENHANCER_POOLS is None:
-        init_face_enhancer_pool()
-
-    with _selector_lock:
-        current_pool_index = _gpu_selector % len(FACE_ENHANCER_POOLS)
-        _gpu_selector += 1
-        
-    pool = FACE_ENHANCER_POOLS[current_pool_index]
+    if POOL_INITIALIZED:
+        return True
     
-    # 如果当前池为空，尝试其他池
-    if pool.empty():
-        for i in range(1,len(FACE_ENHANCER_POOLS)):
-            alt_index = (current_pool_index + i) % len(FACE_ENHANCER_POOLS)
-            alt_pool = FACE_ENHANCER_POOLS[alt_index]
-            if not alt_pool.empty():
-                pool = alt_pool
-                current_pool_index = alt_index  #kangkang
+    print("正在初始化多进程人脸增强池...")
+    start_time = time.time()
+    
+    # 检测可用 GPU
+    available_gpus = []
+    if torch.cuda.is_available():
+        gpu_count = torch.cuda.device_count()
+        print(f"检测到 {gpu_count} 个 GPU，用于人脸增强")
+        for i in range(gpu_count):
+            gpu_name = torch.cuda.get_device_name(i)
+            gpu_memory = torch.cuda.get_device_properties(i).total_memory / 1024**3
+            print(f"GPU {i}: {gpu_name}, 显存: {gpu_memory:.1f}GB")
+            available_gpus.append(i)
+    
+    if not available_gpus:
+        print("未检测到 GPU，使用 CPU 进行增强")
+        available_gpus = [-1]  # 使用 CPU
+    
+    # 创建进程间通信队列
+    TASK_QUEUE = mp.Queue(maxsize=50)
+    RESULT_QUEUE = mp.Queue(maxsize=50)
+    
+    # 创建进程
+    PROCESSES = []
+    process_id = 0
+    
+    # 准备就绪事件列表
+    ready_events = []
+    
+    print("--"*40)
+    print(available_gpus)
+    print("--"*40)
+    for gpu_id in available_gpus[1:]:
+    #for gpu_id in available_gpus:
+        for i in range(processes_per_gpu):
+            # 为每个进程创建就绪事件
+            ready_event = mp.Event()
+            ready_events.append(ready_event)
+            
+            process = mp.Process(
+                target=enhancer_worker_with_ready_signal,
+                args=(process_id, gpu_id, TASK_QUEUE, RESULT_QUEUE, ready_event),
+                daemon=True
+            )
+            process.start()
+            PROCESSES.append(process)
+            process_id += 1
+    
+    # 等待所有进程准备就绪
+    print("等待所有增强进程初始化完成...")
+    for i, event in enumerate(ready_events):
+        event.wait(timeout=120.0)  # 60秒超时
+        if event.is_set():
+            print(f"增强进程 {i} 已就绪")
+        else:
+            print(f"警告: 增强进程 {i} 初始化超时")
+    
+    ENHANCER_PROCESS_POOL = {
+        'processes': PROCESSES,
+        'task_queue': TASK_QUEUE,
+        'result_queue': RESULT_QUEUE,
+        'next_task_id': 0
+    }
+    
+    POOL_INITIALIZED = True
+    init_time = time.time() - start_time
+    print(f"多进程增强池初始化完成，总共 {len(PROCESSES)} 个进程，耗时 {init_time:.2f} 秒")
+    return True
+
+def enhancer_worker_with_ready_signal(process_id, device_id, task_queue, result_queue, ready_event):
+    """带就绪信号的增强工作进程"""
+    print(f"增强进程 {process_id} 启动，使用设备: GPU{device_id}")
+    
+    # 创建独立的 enhancer 实例
+    enhancer = create_enhancer(device_id)
+    
+    # 预热模型
+    try:
+        print(f"进程 {process_id} 预热模型...")
+        dummy_frame = create_dummy_frame()
+        _, _, _ = enhancer.enhance(dummy_frame, paste_back=True)
+        print(f"进程 {process_id} 模型预热完成")
+    except Exception as e:
+        print(f"进程 {process_id} 模型预热失败: {e}")
+    
+    # 发送就绪信号
+    ready_event.set()
+    
+    while True:
+        try:
+            # 获取任务
+            task_id, frame_data = task_queue.get()
+            if task_id is None:  # 终止信号
                 break
+                
+            start_time = time.time()
+            
+            # 执行增强
+            _, _, enhanced_frame = enhancer.enhance(frame_data, paste_back=True)
+            
+            end_time = time.time()
+            cost_time = end_time - start_time
+            
+            # 发送结果
+            result_queue.put((task_id, enhanced_frame, cost_time))
+            
+        except Exception as e:
+            print(f"增强进程 {process_id} 处理失败: {e}")
+            # 发送原始帧作为失败结果
+            result_queue.put((task_id, frame_data, 0))
     
-    return pool.get(), current_pool_index
+    print(f"增强进程 {process_id} 退出")
 
-def return_face_enhancer_to_pool(enhancer, pool_index):
-    """将 GFPGAN 实例归还到对应的池中"""
-    if FACE_ENHANCER_POOLS is not None and pool_index < len(FACE_ENHANCER_POOLS):
-        FACE_ENHANCER_POOLS[pool_index].put(enhancer)
+def shutdown_face_enhancer_pool():
+    """关闭多进程增强池"""
+    global ENHANCER_PROCESS_POOL, POOL_INITIALIZED
+    
+    if not POOL_INITIALIZED:
+        return
+    
+    print("正在关闭多进程增强池...")
+    
+    # 发送终止信号
+    for _ in PROCESSES:
+        TASK_QUEUE.put((None, None))
+    
+    # 等待进程结束
+    for process in PROCESSES:
+        process.join(timeout=5)
+        if process.is_alive():
+            process.terminate()
+    
+    # 清空队列
+    while not TASK_QUEUE.empty():
+        TASK_QUEUE.get()
+    while not RESULT_QUEUE.empty():
+        RESULT_QUEUE.get()
+    
+    ENHANCER_PROCESS_POOL = None
+    POOL_INITIALIZED = False
+    print("多进程增强池已关闭")
 
+# 任务ID计数器
+_task_id_counter = 0
+_task_id_lock = mp.Lock()
+
+def get_next_task_id():
+    """获取下一个任务ID"""
+    global _task_id_counter
+    with _task_id_lock:
+        _task_id_counter += 1
+        return _task_id_counter
+
+def enhance_face(temp_frame: Frame) -> Frame:
+    """使用多进程池进行人脸增强"""
+    global ENHANCER_PROCESS_POOL
+    
+    if not POOL_INITIALIZED:
+        print("错误: 多进程增强池未初始化!")
+        return temp_frame
+    
+    # 获取任务ID
+    task_id = get_next_task_id()
+    
+    # 提交任务
+    fetch_start = time.time()
+    try:
+        TASK_QUEUE.put((task_id, temp_frame), timeout=1.0)
+    except:
+        print("任务队列已满，跳过增强")
+        return temp_frame
+    
+    fetch_cost_time = time.time() - fetch_start
+    
+    # 等待结果
+    enhance_start = time.time()
+    timeout_count = 0
+    while timeout_count < 3:  # 最多尝试3次
+        try:
+            result_id, result_frame, enhance_time = RESULT_QUEUE.get(timeout=5.0)
+            if result_id == task_id:
+                total_enhance_time = time.time() - enhance_start
+                if total_enhance_time > 1.0:  # 如果总等待时间超过1秒，打印警告
+                    print(f"face_enhancer 提交耗时 {fetch_cost_time:.3f}s, 增强耗时 {enhance_time:.3f}s, 总等待 {total_enhance_time:.3f}s")
+                return result_frame
+        except:
+            timeout_count += 1
+            print(f"等待增强结果超时 ({timeout_count}/3)，任务ID: {task_id}")
+    
+    print(f"增强任务 {task_id} 最终超时，返回原帧")
+    return temp_frame
+
+# 原有的其他函数保持不变
 def pre_check() -> bool:
     download_directory_path = models_dir
     conditional_download(
@@ -165,18 +285,6 @@ def pre_start() -> bool:
         update_status("Select an image or video for target path.", NAME)
         return False
     return True
-
-def enhance_face(temp_frame: Frame) -> Frame:
-    """使用双 GPU 对象池进行人脸增强"""
-    enhancer, pool_index = get_face_enhancer_from_pool()
-    try:
-        _, _, temp_frame = enhancer.enhance(temp_frame, paste_back=True)
-        return temp_frame
-    except Exception as e:
-        print(f"人脸增强失败 (GPU {enhancer.gpu_id}): {e}")
-        return temp_frame
-    finally:
-        return_face_enhancer_to_pool(enhancer, pool_index)
 
 def process_frame(source_face: Face, temp_frame: Frame) -> Frame:
     target_face = get_one_face(temp_frame)
