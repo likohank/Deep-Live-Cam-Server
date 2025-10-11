@@ -1,6 +1,7 @@
 import cv2
 import numpy as np
 import time
+import onnxruntime
 import multiprocessing as mp
 import gfpgan
 import torch
@@ -334,7 +335,7 @@ def run_multiprocess_benchmark(total_processes=10, iterations_per_process=5, fra
 if __name__ == "__main__":
     # 多进程压测示例
     run_multiprocess_benchmark(
-        total_processes=6,         # 总进程数量
+        total_processes=12,         # 总进程数量
         iterations_per_process=50,  # 每个进程的迭代次数
         frame_file="frame.dat"      # 帧文件路径
     )

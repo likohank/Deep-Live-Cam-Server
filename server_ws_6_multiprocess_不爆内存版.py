@@ -410,7 +410,7 @@ class FaceSwapServer:
 
 async def main():
     # 根据GPU内存调整工作线程数
-    max_workers = 12
+    max_workers = 5
     
     server = FaceSwapServer(max_workers=max_workers)
     print(f"启动 WebSocket 服务器在端口 8765...")

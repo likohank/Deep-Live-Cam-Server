@@ -9,7 +9,6 @@ import modules.globals
 import modules.processors.frame.core
 from modules.core import update_status
 from modules.face_analyser import get_one_face
-from threading import Lock
 from modules.typing import Frame, Face
 import platform
 import torch
@@ -31,11 +30,12 @@ models_dir = os.path.join(
 
 # 全局多进程池
 ENHANCER_PROCESS_POOL = None
-PROCESS_CHANNELS = []  # 每个进程的专用通道
+TASK_QUEUE = None
+RESULT_QUEUE = None
 PROCESSES = []
 POOL_INITIALIZED = False
 
-PROCESSES_PER_GPU = 6
+PROCESSES_PER_GPU = 5
 
 def create_dummy_frame():
     """创建一个用于预热的虚拟帧"""
@@ -62,21 +62,22 @@ def create_enhancer(device_id=0):
         upscale=1,
         device=device
     )
-
+    
     return enhancer
 
+
 def init_face_enhancer_pool():
-    """初始化多进程增强池 - 进程绑定方案"""
-    global ENHANCER_PROCESS_POOL, PROCESS_CHANNELS, PROCESSES, POOL_INITIALIZED, PROCESSES_PER_GPU
+    """初始化多进程增强池 - 同步版本，会阻塞直到所有进程就绪"""
+    global ENHANCER_PROCESS_POOL, TASK_QUEUE, RESULT_QUEUE, PROCESSES, POOL_INITIALIZED, PROCESSES_PER_GPU
 
     processes_per_gpu = PROCESSES_PER_GPU
-
+    
     if POOL_INITIALIZED:
         return True
-
+    
     print("正在初始化多进程人脸增强池...")
     start_time = time.time()
-
+    
     # 检测可用 GPU
     available_gpus = []
     if torch.cuda.is_available():
@@ -87,81 +88,69 @@ def init_face_enhancer_pool():
             gpu_memory = torch.cuda.get_device_properties(i).total_memory / 1024**3
             print(f"GPU {i}: {gpu_name}, 显存: {gpu_memory:.1f}GB")
             available_gpus.append(i)
-
+    
     if not available_gpus:
         print("未检测到 GPU，使用 CPU 进行增强")
         available_gpus = [-1]  # 使用 CPU
-
-    # 创建进程和专用通道
-    PROCESS_CHANNELS = []
+    
+    # 创建进程间通信队列
+    TASK_QUEUE = mp.Queue(maxsize=50)
+    RESULT_QUEUE = mp.Queue(maxsize=50)
+    
+    # 创建进程
     PROCESSES = []
     process_id = 0
-
+    
     # 准备就绪事件列表
     ready_events = []
-
-    print("--"*40)
-    print(f"可用GPU: {available_gpus}")
-    print("--"*40)
     
-    # 只使用GPU 1及以上的GPU，避免与主进程冲突
-    #for gpu_id in available_gpus[1:]:
-    for gpu_id in available_gpus[:]:
+    print("--"*40)
+    print(available_gpus)
+    print("--"*40)
+    for gpu_id in available_gpus[1:]:
+    #for gpu_id in available_gpus:
         for i in range(processes_per_gpu):
-            # 为每个进程创建专用通道
-            task_queue = mp.Queue(maxsize=5)
-            result_queue = mp.Queue(maxsize=5)
-            
-            channel = {
-                'task_queue': task_queue,
-                'result_queue': result_queue,
-                'process_id': process_id,
-                'gpu_id': gpu_id,
-                'load_counter': 0  # 负载计数器
-            }
-            PROCESS_CHANNELS.append(channel)
-            
             # 为每个进程创建就绪事件
             ready_event = mp.Event()
             ready_events.append(ready_event)
             
             process = mp.Process(
-                target=enhancer_worker,
-                args=(process_id, gpu_id, task_queue, result_queue, ready_event),
+                target=enhancer_worker_with_ready_signal,
+                args=(process_id, gpu_id, TASK_QUEUE, RESULT_QUEUE, ready_event),
                 daemon=True
             )
             process.start()
             PROCESSES.append(process)
             process_id += 1
-
+    
     # 等待所有进程准备就绪
     print("等待所有增强进程初始化完成...")
     for i, event in enumerate(ready_events):
-        event.wait(timeout=120.0)
+        event.wait(timeout=120.0)  # 60秒超时
         if event.is_set():
             print(f"增强进程 {i} 已就绪")
         else:
             print(f"警告: 增强进程 {i} 初始化超时")
-
+    
     ENHANCER_PROCESS_POOL = {
         'processes': PROCESSES,
-        'channels': PROCESS_CHANNELS,
-        'next_task_id': 0,
-        'next_channel_index': 0
+        'task_queue': TASK_QUEUE,
+        'result_queue': RESULT_QUEUE,
+        'next_task_id': 0
     }
-
+    
     POOL_INITIALIZED = True
     init_time = time.time() - start_time
     print(f"多进程增强池初始化完成，总共 {len(PROCESSES)} 个进程，耗时 {init_time:.2f} 秒")
     return True
 
-def enhancer_worker(process_id, device_id, task_queue, result_queue, ready_event):
-    """增强工作进程 - 专用通道"""
+def enhancer_worker_with_ready_signal(process_id, device_id, task_queue, result_queue, ready_event):
+    """带就绪信号的增强工作进程"""
     print(f"增强进程 {process_id} 启动，使用设备: GPU{device_id}")
-
+    
     # 创建独立的 enhancer 实例
     enhancer = create_enhancer(device_id)
-
+    
     # 预热模型
     try:
         print(f"进程 {process_id} 预热模型...")
@@ -170,72 +159,64 @@ def enhancer_worker(process_id, device_id, task_queue, result_queue, ready_event
         print(f"进程 {process_id} 模型预热完成")
     except Exception as e:
         print(f"进程 {process_id} 模型预热失败: {e}")
-
+    
     # 发送就绪信号
     ready_event.set()
     
-    processed_count = 0
-
     while True:
         try:
-            # 从专用任务队列获取任务
+            # 获取任务
+            time1 = time.time()
             task_id, frame_data = task_queue.get()
             if task_id is None:  # 终止信号
                 break
-
-            # 执行增强
-            enhance_start = time.time()
-            _, _, enhanced_frame = enhancer.enhance(frame_data, paste_back=True)
-            enhance_time = time.time() - enhance_start
-
-            # 通过专用结果队列发送结果
-            result_queue.put((task_id, enhanced_frame, enhance_time))
+            start_time = time.time()
+            get_time = start_time - time1
             
-            processed_count += 1
-            print(f"进程 {process_id}: 已处理 {processed_count} 个任务, 增强耗时 {enhance_time:.3f}s")
+            # 执行增强
+            _, _, enhanced_frame = enhancer.enhance(frame_data, paste_back=True)
+            
+            end_time = time.time()
+            cost_time = end_time - start_time
+            
+            # 发送结果
+            result_queue.put((task_id, enhanced_frame, cost_time))
 
+            put_time = time.time() - end_time
+            print(f"进程 {process_id}:enhancer_worker_with_ready_signal get耗时 {get_time:.3f}s, 增强耗时 {cost_time:.3f}s, put耗时 {put_time:.3f}s-----------------------------")
+            
         except Exception as e:
             print(f"增强进程 {process_id} 处理失败: {e}")
-            # 发送失败结果
+            # 发送原始帧作为失败结果
             result_queue.put((task_id, frame_data, 0))
-
-    print(f"增强进程 {process_id} 退出，总共处理了 {processed_count} 个任务")
+    
+    print(f"增强进程 {process_id} 退出")
 
 def shutdown_face_enhancer_pool():
     """关闭多进程增强池"""
     global ENHANCER_PROCESS_POOL, POOL_INITIALIZED
-
+    
     if not POOL_INITIALIZED:
         return
-
+    
     print("正在关闭多进程增强池...")
-
-    # 发送终止信号到所有通道
-    for channel in PROCESS_CHANNELS:
-        try:
-            channel['task_queue'].put((None, None))
-        except:
-            pass
-
+    
+    # 发送终止信号
+    for _ in PROCESSES:
+        TASK_QUEUE.put((None, None))
+    
     # 等待进程结束
     for process in PROCESSES:
         process.join(timeout=5)
         if process.is_alive():
             process.terminate()
-
-    # 清空所有队列
-    for channel in PROCESS_CHANNELS:
-        while not channel['task_queue'].empty():
-            try:
-                channel['task_queue'].get_nowait()
-            except:
-                break
-        while not channel['result_queue'].empty():
-            try:
-                channel['result_queue'].get_nowait()
-            except:
-                break
-
+    
+    # 清空队列
+    while not TASK_QUEUE.empty():
+        TASK_QUEUE.get()
+    while not RESULT_QUEUE.empty():
+        RESULT_QUEUE.get()
+    
     ENHANCER_PROCESS_POOL = None
     POOL_INITIALIZED = False
     print("多进程增强池已关闭")
@@ -251,76 +232,46 @@ def get_next_task_id():
         _task_id_counter += 1
         return _task_id_counter
 
-
-
-# 在全局变量区域添加
-#CHANNEL_SELECTION_LOCK = Lock()
-CHANNEL_SELECTION_LOCK = mp.Lock()
-
 def enhance_face(temp_frame: Frame) -> Frame:
-    """使用多进程池进行人脸增强 - 完整线程安全版本"""
+    """使用多进程池进行人脸增强"""
     global ENHANCER_PROCESS_POOL
-
+    
     if not POOL_INITIALIZED:
         print("错误: 多进程增强池未初始化!")
         return temp_frame
-
+    
     # 获取任务ID
     task_id = get_next_task_id()
     
-    # 选择通道（线程安全）
-    channels = ENHANCER_PROCESS_POOL['channels']
-    
-    # 使用锁保护通道选择
-    with CHANNEL_SELECTION_LOCK:
-        channel_index = ENHANCER_PROCESS_POOL['next_channel_index'] % len(channels)
-        ENHANCER_PROCESS_POOL['next_channel_index'] += 1
-        selected_channel = channels[channel_index]
-    
-    task_queue = selected_channel['task_queue']
-    result_queue = selected_channel['result_queue']
-
     # 提交任务
     fetch_start = time.time()
     try:
-        task_queue.put((task_id, temp_frame), timeout=1.0)
-        print(f"任务 {task_id} 已提交到进程 {selected_channel['process_id']}")
+        TASK_QUEUE.put((task_id, temp_frame), timeout=1.0)
     except:
-        print(f"进程 {selected_channel['process_id']} 的任务队列已满，跳过增强，任务ID: {task_id}")
+        print("任务队列已满，跳过增强")
         return temp_frame
-
+    
     fetch_cost_time = time.time() - fetch_start
-
-    # 等待结果 - 正确处理任务ID不匹配
+    
+    # 等待结果
     enhance_start = time.time()
     timeout_count = 0
-    max_timeout_count = 50  # 50 * 0.2s = 10秒
-    
-    while timeout_count < max_timeout_count:
+    while timeout_count < 3:  # 最多尝试3次
         try:
-            # 设置短超时，以便检查超时计数
-            result_id, result_frame, enhance_time = result_queue.get(timeout=0.2)
-            
+            result_id, result_frame, enhance_time = RESULT_QUEUE.get(timeout=5.0)
             if result_id == task_id:
                 total_enhance_time = time.time() - enhance_start
-                print(f"任务 {task_id} 完成: 提交耗时 {fetch_cost_time:.3f}s, 增强耗时 {enhance_time:.3f}s, 总等待 {total_enhance_time:.3f}s")
+                if total_enhance_time > 1.0:  # 如果总等待时间超过1秒，打印警告
+                    print(f"face_enhancer 提交耗时 {fetch_cost_time:.3f}s, 增强耗时 {enhance_time:.3f}s, 总等待 {total_enhance_time:.3f}s")
                 return result_frame
-            else:
-                # 关键：任务ID不匹配时必须放回队列，避免数据丢失
-                print(f"警告: 任务ID不匹配，期望 {task_id}，收到 {result_id}，将结果放回队列")
-                result_queue.put((result_id, result_frame, enhance_time))
-                timeout_count += 1
-                
-        except Exception as e:
-            # 超时异常
+        except:
             timeout_count += 1
-            if timeout_count % 10 == 0:
-                print(f"等待增强结果 ({timeout_count}/{max_timeout_count})，任务ID: {task_id}")
-
+            print(f"等待增强结果超时 ({timeout_count}/3)，任务ID: {task_id}")
+    
     print(f"增强任务 {task_id} 最终超时，返回原帧")
     return temp_frame
 
-# 其他函数保持不变...
+# 原有的其他函数保持不变
 def pre_check() -> bool:
     download_directory_path = models_dir
     conditional_download(
