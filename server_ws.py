@@ -15,7 +15,7 @@ import heapq  # 用于优先级队列
 
 from modules.processors.frame import face_enhancer
 
-def configurar_providers():
+def configurar_providers2():
     #providers = onnxruntime.get_available_providers()
     #print(f"[ort] available providers: {providers}")
     #if "CUDAExecutionProvider" in providers:
@@ -29,6 +29,40 @@ def configurar_providers():
             }),
             "CPUExecutionProvider",
         ]
+    print("[ort] fallback CPUExecutionProvider")
+    return ["CPUExecutionProvider"]
+
+def configurar_providers():
+    # 获取可用的提供者
+    #providers = onnxruntime.get_available_providers()
+    
+    # 优先选择 TensorRT，如果支持的话
+    if True:
+        print("[ort] using TensorrtExecutionProvider")
+        return [
+            ("TensorrtExecutionProvider", {
+                "device_id": 0,  # 使用 GPU0
+                # 你可以根据需要设置其他配置项，以下是一些常用配置
+                "gpu_mem_limit": 0,  # 设置 GPU 内存限制，0 表示不限制
+                "min_subgraph_size": 1,  # 最小子图大小
+                "trt_max_workspace_size": 1 << 30,  # 最大工作空间大小，单位字节
+            }),
+            "CUDAExecutionProvider",  # 如果 TensorRT 不可用，使用 CPU
+        ]
+    
+    # 如果没有 TensorRT，则回退到 CUDAExecutionProvider
+    if "CUDAExecutionProvider" in providers:
+        print("[ort] using CUDAExecutionProvider")
+        return [
+            ("CUDAExecutionProvider", {
+                "device_id": 0,  # 使用 GPU0
+                "cudnn_conv_use_max_workspace": "1",
+                "do_copy_in_default_stream": "1"
+            }),
+            "CPUExecutionProvider",
+        ]
+    
+    # 如果没有支持的 GPU，使用 CPU
     print("[ort] fallback CPUExecutionProvider")
     return ["CPUExecutionProvider"]
 
