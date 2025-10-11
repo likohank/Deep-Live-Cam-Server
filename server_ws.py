@@ -16,6 +16,8 @@ import heapq  # 用于优先级队列
 from modules.processors.frame import face_enhancer
 
 def configurar_providers():
+    #providers = onnxruntime.get_available_providers()
+    #print(f"[ort] available providers: {providers}")
     #if "CUDAExecutionProvider" in providers:
     if True:
         print("[ort] using CUDAExecutionProvider")

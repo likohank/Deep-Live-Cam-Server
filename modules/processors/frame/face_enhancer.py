@@ -183,7 +183,7 @@ def enhancer_worker_with_ready_signal(process_id, device_id, task_queue, result_
             result_queue.put((task_id, enhanced_frame, cost_time))
 
             put_time = time.time() - end_time
-            print(f"enhancer_worker_with_ready_signal get耗时 {get_time:.3f}s, 增强耗时 {cost_time:.3f}s, put耗时 {put_time:.3f}s-----------------------------")
+            print(f"进程 {process_id}:enhancer_worker_with_ready_signal get耗时 {get_time:.3f}s, 增强耗时 {cost_time:.3f}s, put耗时 {put_time:.3f}s-----------------------------")
             
         except Exception as e:
             print(f"增强进程 {process_id} 处理失败: {e}")
