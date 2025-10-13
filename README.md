@@ -232,6 +232,9 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
     apt-get clean
     apt-get update
 
+    apt-get install -y libnvonnxparsers10
+
+
 
 
 26. 出现ModuleNotFoundError: No module named 'torchvision.transforms.functional_tensor'的原因大概是原先的“名字”改了，但是安装的basicsr包中的名字没有改，所以会报错。
