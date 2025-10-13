@@ -153,12 +153,13 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
 
 14. 准备安装 requirements.txt
 15. pip install cython
+    pip install pysocks
     pip install -i https://mirrors.aliyun.com/pypi/simple tb-nightly
     pip install --upgrade pip setuptools wheel
     pip install torch==2.6.0  --index-url https://download.pytorch.org/whl/cu118
     pip install -i https://pypi.tuna.tsinghua.edu.cn/simple basicsr==1.4.2
 
-16. 安装 requirements.txt，内容如下
+17. 安装 requirements.txt，内容如下
     cog==0.14.12
     customtkinter==5.2.2
     cv2_enumerate_cameras==1.1.18.3
