@@ -218,14 +218,30 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
     source ~/.bashrc
     ls /usr/local/tensorrt/lib/libnvinfer.so.8
 
-25. 出现ModuleNotFoundError: No module named 'torchvision.transforms.functional_tensor'的原因大概是原先的“名字”改了，但是安装的basicsr包中的名字没有改，所以会报错。
+    ------------------------------------------
+    最新版的怎么安装 tensorrt
+    wget https://developer.download.nvidia.cn/compute/cuda/repos/ubuntu2204/x86_64/cuda-keyring_1.1-1_all.deb
+    dpkg -i cuda-keyring_1.1-1_all.deb
+    apt-get clean
+    apt-get update
+
+    curl -fsSL https://developer.download.nvidia.cn/compute/cuda/repos/ubuntu2204/x86_64/3bf863cc.pub  | gpg --dearmor > /usr/share/keyrings/nvidia-cuda-archive-keyring.gpg
+    cat >/etc/apt/sources.list.d/cuda.list <<'EOF'
+       deb [signed-by=/usr/share/keyrings/nvidia-cuda-archive-keyring.gpg] https://developer.download.nvidia.cn/compute/cuda/repos/ubuntu2204/x86_64/ /
+    EOF
+    apt-get clean
+    apt-get update
+
+
+
+26. 出现ModuleNotFoundError: No module named 'torchvision.transforms.functional_tensor'的原因大概是原先的“名字”改了，但是安装的basicsr包中的名字没有改，所以会报错。
 只要在miniconda3/lib/python3.12/site-packages/basicsr/data/degradations.py文件中第8行将
 原from torchvision.transforms.functional_tensor import rgb_to_grayscale
 改成from torchvision.transforms._functional_tensor import rgb_to_grayscale
 或者改成from torchvision.transforms.functional import rgb_to_grayscale
 均能够解决问题
 
-26. 5090显卡上 onnx 最新版有问题 ， 需要使用 pip install onnxruntime-gpu==1.22.0
+27. 5090显卡上 onnx 最新版有问题 ， 需要使用 pip install onnxruntime-gpu==1.22.0
        cog==0.14.12
       customtkinter==5.2.2
       cv2_enumerate_cameras==1.1.18.3
