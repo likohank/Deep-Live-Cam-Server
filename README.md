@@ -225,7 +225,27 @@ sudo apt-get install libfreeimage3 libfreeimage-dev
 或者改成from torchvision.transforms.functional import rgb_to_grayscale
 均能够解决问题
 
-
+26. 5090显卡上 onnx 最新版有问题 ， 需要使用 pip install onnxruntime-gpu==1.22.0
+       cog==0.14.12
+      customtkinter==5.2.2
+      cv2_enumerate_cameras==1.1.18.3
+      facexlib
+      insightface
+      numpy<2
+      onnxruntime-gpu==1.22.0
+      opencv_python_headless==4.11.0.86
+      opennsfw2==0.14.0
+      Pillow
+      pygrabber
+      PyYAML==6.0.2
+      realesrgan==0.3.0
+      scikit_learn==1.2.2
+      tensorflow
+      torch
+      torch_tensorrt
+      torchvision
+      websocket_client==1.8.0
+      websockets==12.0
 
 26. Instructions for CUDA v11.8 and cuDNN 8.7 installation on Ubuntu 22.04 for PyTorch 2.0.0
     https://gist.github.com/lamcnguyen89/71ba818f9492d1b7d5f45b1093e78863
